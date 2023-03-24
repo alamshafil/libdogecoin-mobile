@@ -57,7 +57,7 @@ build() {
     if [ -d "libdogecoin" ]; then
         warn "libdogecoin already exists."
     else
-        git clone https://github.com/dogecoinfoundation/libdogecoin
+        git clone -b main https://github.com/dogecoinfoundation/libdogecoin
     fi
 
     if [ "$BUILD" == "android" ]
