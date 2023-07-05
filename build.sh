@@ -74,16 +74,55 @@ build() {
           rm android-ndk-${ANDROID_NDK_VERSION}-linux-x86_64.zip
       fi
 
+      LIBUNISTRING_VER=libunistring-1.1
+      info "Building ${LIBUNISTRING_VER} for android"
+      if [ -d "${LIBUNISTRING_VER}" ]; then
+          warn "${LIBUNISTRING_VER} already exists."
+      else
+          wget https://ftp.gnu.org/gnu/libunistring/${LIBUNISTRING_VER}.tar.gz
+          tar -xvf ${LIBUNISTRING_VER}.tar.gz
+          rm -r ${LIBUNISTRING_VER}.tar.gz
+          cd ${LIBUNISTRING_VER}
+          mkdir build
+          ./configure \
+            CXX=${BASE}/android-ndk-/${ANDROID_NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ \
+            CC=${BASE}/android-ndk-${ANDROID_NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang \
+            --host aarch64-linux-android21 --prefix=${BASE}/${LIBUNISTRING_VER}/build
+          make clean && make -j$(nproc) && make install
+          cd ..
+      fi
+
+      LIBEVENT_VER=libevent-2.1.12-stable
+      LIBEVENT_URL=https://github.com/libevent/libevent/releases/download/release-2.1.12-stable/libevent-2.1.12-stable.tar.gz
+      info "Building ${LIBEVENT_VER} for android"
+      if [ -d "${LIBEVENT_VER}" ]; then
+          warn "${LIBEVENT_VER} already exists."
+      else
+          wget ${LIBEVENT_URL}
+          tar -xvf ${LIBEVENT_VER}.tar.gz
+          rm -r ${LIBEVENT_VER}.tar.gz
+          cd ${LIBEVENT_VER}
+          mkdir build
+          ./configure \
+            CXX=${BASE}/android-ndk-/${ANDROID_NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ \
+            CC=${BASE}/android-ndk-${ANDROID_NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang \
+            --host aarch64-linux-android21 --prefix=${BASE}/${LIBEVENT_VER}/build --disable-openssl
+          make clean && make -j$(nproc) && make install
+          cd ..
+      fi
+
       info "Configuring libdogecoin"
       cd libdogecoin
       ./autogen.sh
       ./configure \
           CXX=${BASE}/android-ndk-/${ANDROID_NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ \
           CC=${BASE}/android-ndk-${ANDROID_NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang \
-          --host aarch64-linux-android21 --disable-net --disable-dependency-tracking \
+          CPPFLAGS="-I${BASE}/${LIBUNISTRING_VER}/build/include -I${BASE}/${LIBEVENT_VER}/build/include" \
+          LDFLAGS="-L${BASE}/${LIBUNISTRING_VER}/build/lib -L${BASE}/${LIBEVENT_VER}/build/lib" \
+          --host aarch64-linux-android21 --disable-dependency-tracking
 
       info "Building libdogecoin"
-      make clean && make
+      make clean && make -j$(nproc)
 
       info "Copying libs"
       cd ..
@@ -96,6 +135,9 @@ build() {
       fi
       mkdir -p ./arm64-v8a
       cp -r ${BASE}/libdogecoin/.libs/libdogecoin.so ./arm64-v8a
+      cp -r ${BASE}/${LIBUNISTRING_VER}/build/lib/libunistring.so ./arm64-v8a
+      cp -r ${BASE}/${LIBEVENT_VER}/build/lib/libevent-2.1.so ./arm64-v8a
+      cp -r ${BASE}/${LIBEVENT_VER}/build/lib/libevent_core-2.1.so ./arm64-v8a
 
       info "Done! View results in ${BASE}/build"
       info "For use in Flutter, copy build/arm64-v8a to <flutter project>/android/app/src/main/jniLibs/arm64-v8a"
@@ -121,25 +163,80 @@ build() {
         git clone https://github.com/theos/sdks ios-sdks
       fi
 
-      info "Configuring libdogecoin"
       IOS_SDK=iPhoneOS13.7.sdk
+
+      LIBUNISTRING_VER=libunistring-1.1
+      info "Building ${LIBUNISTRING_VER} for iOS"
+      if [ -d "${LIBUNISTRING_VER}" ]; then
+          warn "${LIBUNISTRING_VER} already exists."
+      else
+          wget https://ftp.gnu.org/gnu/libunistring/${LIBUNISTRING_VER}.tar.gz
+          tar -xvf ${LIBUNISTRING_VER}.tar.gz
+          rm -r ${LIBUNISTRING_VER}.tar.gz
+          cd ${LIBUNISTRING_VER}
+          mkdir build
+          ./configure \
+            CXX=${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/clang++ \
+            CC=${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/clang \
+            CFLAGS="--target=arm64-apple-darwin -isysroot ${BASE}/ios-sdks/${IOS_SDK}" \
+            CXXFLAGS="--target=arm64-apple-darwin" \
+            AR=${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/ar \
+            RANLIB=${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/ranlib \
+            --host arm64-apple-darwin --prefix=${BASE}/${LIBUNISTRING_VER}/build
+
+          # Patching libtool
+          sed -i -e 's/CC="[^"]*/& --target=arm64-apple-darwin/' libtool
+
+          make clean && make -j$(nproc) && make install
+          cd ..
+      fi
+
+      LIBEVENT_VER=libevent-2.1.12-stable
+      LIBEVENT_URL=https://github.com/libevent/libevent/releases/download/release-2.1.12-stable/libevent-2.1.12-stable.tar.gz
+      info "Building ${LIBEVENT_VER} for iOS"
+      if [ -d "${LIBEVENT_VER}" ]; then
+          warn "${LIBEVENT_VER} already exists."
+      else
+          wget ${LIBEVENT_URL}
+          tar -xvf ${LIBEVENT_VER}.tar.gz
+          rm -r ${LIBEVENT_VER}.tar.gz
+          cd ${LIBEVENT_VER}
+          mkdir build
+          ./configure \
+            CXX=${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/clang++ \
+            CC=${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/clang \
+            CFLAGS="--target=arm64-apple-darwin -isysroot ${BASE}/ios-sdks/${IOS_SDK}" \
+            CXXFLAGS="--target=arm64-apple-darwin" \
+            AR=${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/ar \
+            RANLIB=${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/ranlib \
+            --host arm-apple-darwin --prefix=${BASE}/${LIBEVENT_VER}/build --disable-openssl
+
+          # Patching libtool
+          sed -i -e 's/CC="[^"]*/& --target=arm64-apple-darwin/' libtool
+
+          make clean && make -j$(nproc) && make install
+          cd ..
+      fi
+
+      info "Configuring libdogecoin"
       cd libdogecoin
       ./autogen.sh
       ./configure \
         CXX=${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/clang++ \
         CC=${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/clang \
-        CFLAGS="--target=arm64-apple-darwin -isysroot ${BASE}/ios-sdks/${IOS_SDK}" \
-        CXXFLAGS="--target=arm64-apple-darwin" \
         AR=${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/ar \
         RANLIB=${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/ranlib \
-        -host arm64-apple-darwin --disable-net --disable-dependency-tracking \
+        CFLAGS="--target=arm64-apple-darwin -isysroot ${BASE}/ios-sdks/${IOS_SDK}" \
+        CXXFLAGS="--target=arm64-apple-darwin" \
+        CPPFLAGS="-I${BASE}/${LIBUNISTRING_VER}/build/include -I${BASE}/${LIBEVENT_VER}/build/include" \
+        LDFLAGS="-L${BASE}/${LIBUNISTRING_VER}/build/lib -L${BASE}/${LIBEVENT_VER}/build/lib" \
+        -host arm64-apple-darwin --disable-dependency-tracking
 
       info "Patching libtool"
       sed -i -e 's/CC="[^"]*/& --target=arm64-apple-darwin/' libtool
 
       info "Building libdogecoin"
-      make clean && make
-
+      make clean && make -j$(nproc)
 
       info "Copying libs"
       cd ..
@@ -150,12 +247,24 @@ build() {
           mkdir build
           cd build
       fi
-      cp -r ${BASE}/libdogecoin/.libs/libdogecoin.0.dylib ./libdogecoin.dylib
+      cp -r ${BASE}/libdogecoin/.libs/libdogecoin.1.dylib ./libdogecoin.dylib
+      cp -r ${BASE}/${LIBUNISTRING_VER}/build/lib/libunistring.5.dylib ./libunistring.dylib
+      cp -r ${BASE}/${LIBEVENT_VER}/build/lib/libevent-2.1.7.dylib ./libevent-2.1.dylib
+      cp -r ${BASE}/${LIBEVENT_VER}/build/lib/libevent_core-2.1.7.dylib ./libevent_core-2.1.dylib
 
       info "Creating libdogecoin-lipo"
       ${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/lipo -create libdogecoin.dylib -output libdogecoin-lipo
 
-      info "Creating framework for Xcode"
+      info "Creating libunistring-lipo"
+      ${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/lipo -create libunistring.dylib -output libunistring-lipo
+
+      info "Creating libevent-2.1-lipo"
+      ${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/lipo -create libevent-2.1.dylib -output libevent-2.1-lipo
+
+      info "Creating libevent_core-2.1-lipo"
+      ${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/lipo -create libevent_core-2.1.dylib -output libevent_core-2.1-lipo
+
+      info "Creating libdogecoin framework for Xcode"
       mkdir -p ./libdogecoin.framework
       cd libdogecoin.framework
       cp ../libdogecoin-lipo ./libdogecoin
@@ -181,7 +290,7 @@ cat << EOF > Info.plist
         <key>CFBundleShortVersionString</key>
         <string>1.0</string>
         <key>CFBundleVersion</key>
-        <string>0.1.0</string>
+        <string>0.1.2</string>
         <key>NSPrincipalClass</key>
         <string></string>
     </dict>
@@ -190,12 +299,126 @@ EOF
 
       cd ..
 
-      info "Patching framework"
+      info "Creating libunistring framework for Xcode"
+      mkdir -p ./libunistring.framework
+      cd libunistring.framework
+      cp ../libunistring-lipo ./libunistring
+      touch Info.plist
+
+cat << EOF > Info.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>CFBundleDevelopmentRegion</key>
+        <string>en</string>
+        <key>CFBundleExecutable</key>
+        <string>libunistring</string>
+        <key>CFBundleIdentifier</key>
+        <string>com.dogecoinfdn.libunistring</string>
+        <key>CFBundleInfoDictionaryVersion</key>
+        <string>6.0</string>
+        <key>CFBundleName</key>
+        <string>libunistring</string>
+        <key>CFBundlePackageType</key>
+        <string>FMWK</string>
+        <key>CFBundleShortVersionString</key>
+        <string>1.0</string>
+        <key>CFBundleVersion</key>
+        <string>0.1.2</string>
+        <key>NSPrincipalClass</key>
+        <string></string>
+    </dict>
+</plist>
+EOF
+
+      cd ..
+
+      info "Creating libevent-2.1 framework for Xcode"
+      mkdir -p ./libevent-2.1.framework
+      cd libevent-2.1.framework
+      cp ../libevent-2.1-lipo ./libevent-2.1
+      touch Info.plist
+
+cat << EOF > Info.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>CFBundleDevelopmentRegion</key>
+        <string>en</string>
+        <key>CFBundleExecutable</key>
+        <string>libevent-2.1</string>
+        <key>CFBundleIdentifier</key>
+        <string>com.dogecoinfdn.libevent-2.1</string>
+        <key>CFBundleInfoDictionaryVersion</key>
+        <string>6.0</string>
+        <key>CFBundleName</key>
+        <string>libevent-2.1</string>
+        <key>CFBundlePackageType</key>
+        <string>FMWK</string>
+        <key>CFBundleShortVersionString</key>
+        <string>1.0</string>
+        <key>CFBundleVersion</key>
+        <string>0.1.2</string>
+        <key>NSPrincipalClass</key>
+        <string></string>
+    </dict>
+</plist>
+EOF
+
+      cd ..
+
+      info "Creating libevent_core-2.1 framework for Xcode"
+      mkdir -p ./libevent_core-2.1.framework
+      cd libevent_core-2.1.framework
+      cp ../libevent_core-2.1-lipo ./libevent_core-2.1
+      touch Info.plist
+
+cat << EOF > Info.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>CFBundleDevelopmentRegion</key>
+        <string>en</string>
+        <key>CFBundleExecutable</key>
+        <string>libevent_core-2.1</string>
+        <key>CFBundleIdentifier</key>
+        <string>com.dogecoinfdn.libevent_core-2.1</string>
+        <key>CFBundleInfoDictionaryVersion</key>
+        <string>6.0</string>
+        <key>CFBundleName</key>
+        <string>libevent_core-2.1</string>
+        <key>CFBundlePackageType</key>
+        <string>FMWK</string>
+        <key>CFBundleShortVersionString</key>
+        <string>1.0</string>
+        <key>CFBundleVersion</key>
+        <string>0.1.2</string>
+        <key>NSPrincipalClass</key>
+        <string></string>
+    </dict>
+</plist>
+EOF
+
+      cd ..
+
+      info "Patching frameworks"
       ${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/install_name_tool -id @rpath/libdogecoin.framework/libdogecoin libdogecoin.framework/libdogecoin
+      ${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/install_name_tool -id @rpath/libunistring.framework/libunistring libunistring.framework/libunistring
+      ${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/install_name_tool -id @rpath/libevent-2.1.framework/libevent-2.1 libevent-2.1.framework/libevent-2.1
+      ${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/install_name_tool -id @rpath/libevent_core-2.1.framework/libevent_core-2.1 libevent_core-2.1.framework/libevent_core-2.1
+
+      info "Patching framework imports"
+      ${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/install_name_tool -change ${BASE}/${LIBUNISTRING_VER}/build/lib/libunistring.5.dylib @rpath/libunistring.framework/libunistring libdogecoin.framework/libdogecoin
+      ${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/install_name_tool -change ${BASE}/${LIBEVENT_VER}/build/lib/libevent-2.1.7.dylib @rpath/libevent-2.1.framework/libevent-2.1 libdogecoin.framework/libdogecoin
+      ${BASE}/ios-toolchain/ios-arm64e-clang-toolchain/bin/install_name_tool -change ${BASE}/${LIBEVENT_VER}/build/lib/libevent_core-2.1.7.dylib @rpath/libevent_core-2.1.framework/libevent_core-2.1 libdogecoin.framework/libdogecoin
 
       info "Done! View results in ${BASE}/build"
       info "Created libdogecoin.dylib, libdogecoin-lipo, and unsigned libdogecoin.framework"
-      info "For use in Flutter, add libdogecoin.framework to your Xcode project."
+      info "Created unsigned libunistring.dylib + lipo + framework and unsigned libevent.dylib + lipo + framework"
+      info "For use in Flutter, add all frameworks (libdogecoin, libunistring, libevent*) to your Xcode project."
 
     fi
 }
